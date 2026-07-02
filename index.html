@@ -75,6 +75,13 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
 .crbox{border:1px solid var(--line);border-radius:8px;padding:8px 10px;}
 .crbox .l{font-size:10.5px;text-transform:uppercase;letter-spacing:.3px;color:var(--muted);}
 .crbox .v{font-size:15px;font-weight:700;margin-top:2px;}
+#printarea{display:none;}
+@media print{
+  body{background:#fff;margin:0;}
+  .wrap{display:none!important;}
+  #pmodal{display:none!important;}
+  #printarea{display:block!important;}
+}
 .pmodal{position:fixed;inset:0;background:rgba(16,32,43,.45);z-index:50;display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;}
 .pmodal.open{display:flex;}
 .pmcard{background:var(--card);border-radius:12px;box-shadow:0 12px 40px rgba(16,32,43,.25);max-width:1080px;width:100%;padding:20px 22px;}
@@ -244,6 +251,7 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
 </div>
 
 <div id="pmodal" class="pmodal"><div class="pmcard" id="pmcard"></div></div>
+<div id="printarea"></div>
 
 
 <script type="text/plain" id="appsrc">
@@ -375,7 +383,7 @@ document.addEventListener('change',e=>{
     renderTestOutput();
   }
 });
-document.addEventListener('click',e=>{ if(e.target.id==='burdenReset'){ BURDEN=STORED_BURDEN; renderGbar(); applyBurden(); } });
+document.addEventListener('click',e=>{ if(e.target.id==='burdenReset'){ BURDEN=STORED_BURDEN; renderGbar(); applyBurden(); } if(e.target.closest&&e.target.closest('#q_print')){ printQuoteReport(); } });
 
 // ---------------- aggregation ----------------
 function groupSum(rows,keyFn,fields){ const m=new Map(); rows.forEach(r=>{const k=keyFn(r); let o=m.get(k); if(!o){o={};fields.forEach(f=>o[f]=0);o.__cust=r.customer;m.set(k,o);} fields.forEach(f=>o[f]+=(+r[f]||0)); o.__n=(o.__n||0)+1;}); return m; }
@@ -585,7 +593,7 @@ DRAW.lookup=function(w){
 
 // ---------------- Test tab: department cost breakdown ----------------
 let SODA=null; function soActIdx(){ if(SODA) return SODA; SODA={}; ((D&&D.soAct)||[]).forEach(r=>SODA[r.son]=r); return SODA; }
-let TEST_PART=null, TEST_SOS=[];
+let TEST_PART=null, TEST_SOS=[], LAST_QUOTE=null;
 function partDepts(sos){ const di=soDeptIdx(), s=new Set(); sos.forEach(r=>{(di[rstrip(r.so)]||[]).forEach(d=>s.add(+d.dept));}); return [...s].sort((a,b)=>deptName(a).localeCompare(deptName(b))); }
 function stdAvg(sos){ const di=soDeptIdx(), agg={}; let totQty=0,n=0; sos.forEach(r=>{ (di[rstrip(r.so)]||[]).forEach(d=>{ const o=agg[d.dept]=agg[d.dept]||{run:0,setup:0,ovh:0}; o.run+=d.run||0; o.setup+=d.setup||0; o.ovh+=d.ovh||0; }); totQty+=r.qty||0; n++; }); const std={}; Object.keys(agg).forEach(k=>std[k]={runpc:totQty>0?agg[k].run/totQty:0, ovhpc:totQty>0?agg[k].ovh/totQty:0, setup:n>0?agg[k].setup/n:0}); return std; }
 function stdSO(r){ const di=soDeptIdx(), q=r?r.qty||0:0, std={}; if(r) (di[rstrip(r.so)]||[]).forEach(d=>std[d.dept]={runpc:q>0?(d.run||0)/q:0, ovhpc:q>0?(d.ovh||0)/q:0, setup:d.setup||0}); return std; }
@@ -642,6 +650,7 @@ function renderTestOutput(){
     if(pc!=null){sumPc+=pc;cntPc++;}
     return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,ovhH,lab,cov,mat,oh,tot,pc,margin}; });
   const avgPc=cntPc?sumPc/cntPc:null;
+  LAST_QUOTE={part:TEST_PART, customer:(sos[0]?sos[0].customer:''), Q, Qs, yPct, margin, burden:BURDEN, qMat, qRun, qOvhLab, qSet, qOH, qTot, qpc, price, pricePc, avgPc, avgRevPc};
   const qk=(l,v,c='')=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}" style="font-size:18px;">${v}</div></div>`;
   const qb=(l,forQ,pc,str=false)=>`<tr${str?' style="border-top:2px solid var(--line);font-weight:700;"':''}><td>${l}</td><td>${fmtUSD(forQ)}</td><td class="muted">${pc==null?'':fmtUSD(pc,2)}</td></tr>`;
   const arow=r=>`<tr><td><span class="solink" data-so="${r.so}">${r.so}</span></td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtH(r.ovhH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
@@ -661,8 +670,8 @@ function renderTestOutput(){
        <div class="muted" style="font-size:11.5px;margin-top:6px;">To ship <b>${fmtN(Q)}</b> good parts you make <b>${fmtN(Math.round(Qs))}</b> at <b>${yPct}%</b> yield &mdash; material, run &amp; indirect labor scale with parts made; setup is once per lot. Overhead = $${BURDEN.toFixed(2)}/hr &times; ${fmtH(qHrs)} hrs. Everything is per <b>good</b> part.</div>
      </div>
      <div>
-       <div class="section-title">Quote vs actual</div>
-       <div class="kpis" style="grid-template-columns:1fr 1fr;">
+       <div style="display:flex;justify-content:space-between;align-items:center;"><span class="section-title" style="margin:0;">Quote vs actual</span><button id="q_print" class="chgbtn">&#128424; Print</button></div>
+       <div class="kpis" style="grid-template-columns:1fr 1fr;margin-top:12px;">
          ${qk('Quoted cost/pc',fmtUSD(qpc,2))}
          ${qk('Actual avg cost/pc',avgPc==null?'&ndash;':fmtUSD(avgPc,2),(avgPc!=null&&qpc<avgPc)?'neg':'pos')}
          ${qk('Quoted price/pc ('+margin+'%)',fmtUSD(pricePc,2),'pos')}
@@ -674,6 +683,44 @@ function renderTestOutput(){
    <div style="margin-top:18px;"><div class="section-title">Actual cost of past shop orders <span class="muted" style="font-weight:400;font-size:12px;">(operator real rates; overhead $${BURDEN_PRE.toFixed(2)}/hr, or $${BURDEN.toFixed(2)} on/after ${BURDEN_CUTOFF})</span></div>
      <div class="tablewrap"><table><thead><tr><th>SO#</th><th>Closed</th><th>Qty</th><th>Run h</th><th>Setup h</th><th>OH h</th><th>Actual labor</th><th>Rate cov.</th><th>Material</th><th>Overhead</th><th>Total cost</th><th>Cost/pc</th><th>Margin</th></tr></thead><tbody>${arows.map(arow).join('')}</tbody></table></div>
    </div>`;
+}
+function printQuoteReport(){
+  const q=LAST_QUOTE; if(!q||!q.part){ alert('Pick a part and build a quote first.'); return; }
+  const m=(v,d=0)=>v==null?'&ndash;':(v<0?'-$':'$')+Math.abs(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  const td='padding:5px 9px;border-bottom:1px solid #ddd;', tdr=td+'text-align:right;';
+  const row=(l,tot,pc,strong)=>`<tr style="${strong?'font-weight:800;':''}"><td style="${strong?'padding:7px 9px;border-top:2px solid #111;':td}">${l}</td><td style="${strong?'padding:7px 9px;border-top:2px solid #111;text-align:right;':tdr}">${m(tot)}</td><td style="${strong?'padding:7px 9px;border-top:2px solid #111;text-align:right;':tdr}color:#555;">${pc==null?'':'$'+pc.toFixed(2)}</td></tr>`;
+  const kv=(a,b,c,d)=>`<tr><td style="${td}color:#555;width:24%;">${a}</td><td style="${td}width:26%;"><b>${b}</b></td><td style="${td}color:#555;width:24%;">${c}</td><td style="${td}"><b>${d}</b></td></tr>`;
+  $('#printarea').innerHTML=`
+   <div style="font-family:Arial,Helvetica,sans-serif;color:#111;max-width:740px;margin:0 auto;padding:26px;">
+     <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #111;padding-bottom:10px;">
+       <div><div style="font-size:28px;font-weight:800;letter-spacing:1px;">CAMCO</div><div style="font-size:13px;color:#555;">Job Costing &mdash; Quotation</div></div>
+       <div style="text-align:right;font-size:13px;line-height:1.7;"><div><b>Part #:</b> ${q.part}</div><div><b>Customer:</b> ${q.customer||'&ndash;'}</div><div><b>Date:</b> ${new Date().toLocaleDateString()}</div></div>
+     </div>
+     <table style="width:100%;border-collapse:collapse;font-size:13px;margin-top:16px;">
+       ${kv('Quantity (good)',q.Q.toLocaleString(),'Make @ '+q.yPct+'% yield',Math.round(q.Qs).toLocaleString())}
+       ${kv('Burden rate','$'+q.burden.toFixed(2)+'/hr','Target margin',q.margin+'%')}
+     </table>
+     <div style="font-size:15px;font-weight:700;margin:18px 0 6px;">Cost build-up</div>
+     <table style="width:100%;border-collapse:collapse;font-size:13px;">
+       <thead><tr><th style="text-align:left;padding:5px 9px;border-bottom:2px solid #111;">Bucket</th><th style="text-align:right;padding:5px 9px;border-bottom:2px solid #111;">For ${q.Q.toLocaleString()}</th><th style="text-align:right;padding:5px 9px;border-bottom:2px solid #111;">Per good pc</th></tr></thead>
+       <tbody>
+         ${row('Material',q.qMat,q.qMat/q.Q)}
+         ${row('Run labor',q.qRun,q.qRun/q.Q)}
+         ${row('Indirect labor (overhead hrs)',q.qOvhLab,q.qOvhLab/q.Q)}
+         ${row('Setup labor (per lot)',q.qSet,q.qSet/q.Q)}
+         ${row('Overhead (burden)',q.qOH,q.qOH/q.Q)}
+         ${row('Quoted cost',q.qTot,q.qpc,true)}
+         <tr style="font-weight:800;background:#eef7ee;"><td style="padding:7px 9px;">Quoted PRICE (${q.margin}% margin)</td><td style="padding:7px 9px;text-align:right;">${m(q.price)}</td><td style="padding:7px 9px;text-align:right;">$${q.pricePc.toFixed(2)}</td></tr>
+       </tbody>
+     </table>
+     <div style="font-size:15px;font-weight:700;margin:18px 0 6px;">Quote vs actual history</div>
+     <table style="width:100%;border-collapse:collapse;font-size:13px;">
+       ${kv('Quoted cost / pc','$'+q.qpc.toFixed(2),'Actual avg cost / pc',q.avgPc==null?'&ndash;':'$'+q.avgPc.toFixed(2))}
+       ${kv('Quoted price / pc','$'+q.pricePc.toFixed(2),'Actual avg selling / pc',q.avgRevPc==null?'&ndash;':'$'+q.avgRevPc.toFixed(2))}
+     </table>
+     <div style="font-size:10.5px;color:#777;margin-top:22px;border-top:1px solid #ccc;padding-top:8px;">Costed per good part: to ship ${q.Q.toLocaleString()} good parts, make ${Math.round(q.Qs).toLocaleString()} at ${q.yPct}% yield. Material, run &amp; indirect labor scale with parts made; setup is once per lot; overhead = hours &times; $${q.burden.toFixed(2)}/hr. Generated ${new Date().toLocaleString()} from CamcoDB &mdash; estimate for internal review.</div>
+   </div>`;
+  window.print();
 }
 DRAW.test=function(w){
   const rows=soIn(w), pidx={}; rows.forEach(r=>{(pidx[r.part]=pidx[r.part]||[]).push(r);});
