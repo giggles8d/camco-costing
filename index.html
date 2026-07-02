@@ -271,19 +271,22 @@ const DMAX = (D&&D.dataMax) ? D.dataMax : '2026-12-31';
 function minClosed(){ let m=null; (D.so||[]).forEach(r=>{ if(r.closed&&(!m||r.closed<m)) m=r.closed; }); return m||(D.windowStart||'2023-01-01'); }
 const DMIN = D?minClosed():'2023-01-01';
 const ym=d=>(d||'').slice(0,7);
-function shiftMonthStart(dstr,n){ const y=+dstr.slice(0,4), m=+dstr.slice(5,7); const t=new Date(Date.UTC(y,m-1+n,1)); return t.toISOString().slice(0,10); }
+function ymd(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+const TODAY = ymd(new Date());
+const THISYEAR = new Date().getFullYear();
+function monthsAgo(n){ const t=new Date(); t.setMonth(t.getMonth()-n); return ymd(t); }
 function preset(key){
   switch(key){
-    case 'l12': return {start:shiftMonthStart(DMAX,-11), end:DMAX, label:'Last 12 months'};
-    case 'l24': return {start:shiftMonthStart(DMAX,-23), end:DMAX, label:'Last 24 months'};
+    case 'l12': return {start:monthsAgo(12), end:TODAY, label:'Last 12 months'};
+    case 'l24': return {start:monthsAgo(24), end:TODAY, label:'Last 24 months'};
     case 'fy2023': return {start:'2023-01-01', end:'2023-12-31', label:'FY 2023'};
     case 'fy2024': return {start:'2024-01-01', end:'2024-12-31', label:'FY 2024'};
     case 'fy2025': return {start:'2025-01-01', end:'2025-12-31', label:'FY 2025'};
-    case 'ytd2026': return {start:'2026-01-01', end:DMAX, label:'2026 YTD'};
-    default: return {start:DMIN, end:DMAX, label:'All (FY2023–2026 YTD)'};
+    case 'ytd2026': return {start:THISYEAR+'-01-01', end:TODAY, label:THISYEAR+' YTD'};
+    default: return {start:DMIN, end:(DMAX>TODAY?DMAX:TODAY), label:'All history'};
   }
 }
-let gWin = preset('all');
+let gWin = preset('l12');
 const tabWin = {};
 const TABS = ['overview','revenue','material','labor','quote','accurate','lookup','test'];
 const DRAW = {};
