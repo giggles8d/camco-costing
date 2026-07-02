@@ -87,6 +87,30 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
 .pmcard{background:var(--card);border-radius:12px;box-shadow:0 12px 40px rgba(16,32,43,.25);max-width:1080px;width:100%;padding:20px 22px;}
 .pmclose{float:right;cursor:pointer;border:1px solid var(--line);border-radius:8px;padding:3px 10px;font-weight:700;color:var(--muted);background:var(--card);}
 .pmclose:hover{color:var(--ink);}
+/* shared top bar */
+.topbar{display:flex;align-items:center;gap:14px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:8px 14px;margin-bottom:14px;box-shadow:var(--shadow);flex-wrap:wrap;}
+.topbar a.hub{font-weight:700;color:var(--blue);text-decoration:none;font-size:13.5px;white-space:nowrap;}
+.topbar a.hub:hover{text-decoration:underline;}
+.topbar .tb-title{font-weight:700;font-size:14px;color:var(--ink);}
+.topbar .tb-meta{margin-left:auto;font-size:12px;color:var(--muted);text-align:right;line-height:1.4;}
+.topbar .tb-meta b{color:var(--ink);}
+/* part -> planning cross-link */
+.xplink{border:1px solid var(--line);background:var(--card);border-radius:5px;padding:0 5px;margin-left:5px;font-size:11px;line-height:1.7;cursor:pointer;color:var(--blue);vertical-align:middle;display:inline-block;}
+.xplink:hover{border-color:var(--blue);background:#eef4ff;}
+.trend-up{color:var(--green);font-weight:700;} .trend-dn{color:var(--red);font-weight:700;} .trend-fl{color:var(--muted);}
+/* mobile pass (~390px) */
+@media(max-width:560px){
+  .wrap{padding:14px 11px 48px;}
+  h1{font-size:18px;} .sub{font-size:12px;}
+  header{align-items:flex-start;}
+  .topbar{gap:8px 12px;} .topbar .tb-meta{margin-left:0;flex-basis:100%;text-align:left;}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;gap:2px;}
+  .tab{white-space:nowrap;padding:8px 11px;font-size:12.5px;}
+  .kpis{grid-template-columns:1fr 1fr;}
+  .panel{padding:14px 11px;}
+  .eqn{font-size:12px;padding:10px 12px;} .eqn .muted{flex-basis:100%;margin-left:0!important;}
+  .gbar,.tabctl{gap:6px;}
+}
 </style>
 </head>
 <body>
@@ -100,12 +124,16 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
   </div>
 </div>
 <div class="wrap">
+<div class="topbar">
+  <a class="hub" href="https://camco-hub.netlify.app">&#8962; CAMCO Hub</a>
+  <span class="tb-title">Job Costing</span>
+  <div class="tb-meta" id="meta">loading&hellip;</div>
+</div>
 <header>
   <div>
     <h1>Camco Job-Costing Dashboard</h1>
     <div class="sub">Revenue &minus; Material &minus; Labor &minus; Overhead = Profit &nbsp;|&nbsp; per shop order, with drill-downs</div>
   </div>
-  <div class="meta" id="meta">loading&hellip;</div>
 </header>
 
 <div class="eqn">
@@ -122,13 +150,15 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
 
 <div class="tabs" id="tabs">
   <div class="tab active" data-p="overview">Job P&amp;L</div>
+  <div class="tab" data-p="worst">Worst Offenders</div>
   <div class="tab" data-p="revenue">Revenue</div>
+  <div class="tab" data-p="cmargin">Customer Margin</div>
   <div class="tab" data-p="material">Material</div>
   <div class="tab" data-p="labor">Labor</div>
   <div class="tab" data-p="quote">Quote vs Actual</div>
   <div class="tab" data-p="accurate">Accurate Cost</div>
   <div class="tab" data-p="lookup">Part Lookup</div>
-  <div class="tab" data-p="test" style="color:#7c3aed;">Test</div>
+  <div class="tab" data-p="test">Quoting</div>
   <div class="tab" data-p="notes">Data notes</div>
 </div>
 
@@ -146,6 +176,14 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
   <div style="margin-top:18px;"><div class="section-title">Margin by Part <span class="muted" style="font-weight:400;font-size:12px;">(click a part for its SO breakdown)</span></div><input class="search" id="s_part" placeholder="Filter parts&hellip;"><div class="tablewrap"><table id="t_part"></table></div></div>
 </div>
 
+<div class="panel" id="p-worst">
+  <div class="tabctl" id="ctl-worst"></div>
+  <div class="flag">The parts bleeding the most money over the selected window &mdash; your action list. Ranked by total dollar loss. Trend compares the last 12 months vs the 12 before. Rework SOs (ending in R) are excluded.</div>
+  <div class="kpis" id="w_kpis"></div>
+  <div style="margin-top:16px;"><div class="section-title">Worst Offenders &mdash; parts losing the most money <span class="muted" style="font-weight:400;font-size:12px;">(top 20; click a part for its SO breakdown)</span></div>
+  <input class="search" id="s_worst" placeholder="Filter part / customer&hellip;"><div class="tablewrap" style="max-height:none;"><table id="t_worst"></table></div></div>
+</div>
+
 <div class="panel" id="p-revenue">
   <div class="tabctl" id="ctl-revenue"></div>
   <div class="grid2">
@@ -156,6 +194,13 @@ footer{margin-top:26px;color:var(--muted);font-size:12px;text-align:center;}
     <div><div class="section-title">Top Customers by Revenue</div><input class="search" id="s_rcust" placeholder="Filter&hellip;"><div class="tablewrap"><table id="t_rcust"></table></div></div>
     <div><div class="section-title">Top Parts by Revenue</div><input class="search" id="s_rpart" placeholder="Filter&hellip;"><div class="tablewrap"><table id="t_rpart"></table></div></div>
   </div>
+</div>
+
+<div class="panel" id="p-cmargin">
+  <div class="flag" style="background:#eef4ff;border-color:#cfe0fb;color:#1e40af;">Dollar-weighted margin % by customer, per quarter, across the full 3-year history. The chart shows the top customers by revenue; the table flags any customer whose margin dropped more than 5 points year-over-year. Rework SOs (ending in R) are excluded.</div>
+  <div><h3>Margin % by Customer, per Quarter <span class="note">(top customers by revenue)</span></h3><div class="chartbox tall"><canvas id="c_cmargin"></canvas></div></div>
+  <div style="margin-top:18px;"><div class="section-title">Customer margin trend <span class="muted" style="font-weight:400;font-size:12px;">(last 12 mo vs the 12 before; &#9660; = down &gt;5 pts)</span></div>
+  <input class="search" id="s_cmargin" placeholder="Filter customers&hellip;"><div class="tablewrap" style="max-height:none;"><table id="t_cmargin"></table></div></div>
 </div>
 
 <div class="panel" id="p-material">
@@ -288,7 +333,7 @@ function preset(key){
 }
 let gWin = preset('l12');
 const tabWin = {};
-const TABS = ['overview','revenue','material','labor','quote','accurate','lookup','test'];
+const TABS = ['overview','worst','revenue','cmargin','material','labor','quote','accurate','lookup','test'];
 const DRAW = {};
 function effWin(tab){ return tabWin[tab] || gWin; }
 const inWin=(closed,w)=>closed>=w.start&&closed<=w.end;
@@ -313,6 +358,10 @@ const DEPT={}; ((D&&D.deptRates)||[]).forEach(r=>{ DEPT[r.id]={name:r.name,rate:
 const deptOverride={};
 let LAST_TEST=null, SODEPT=null;
 const rstrip=s=>/^[Rr]/.test(s||'')?s.slice(1):s;
+const isRework=s=>/[Rr]\s*$/.test(String(s||''));   // SO number ends in R = rework
+// part -> Planning (Expeditor) cross-link button: copies the part # and opens the planning site
+const xpBtn=part=>`<button class="xplink" data-part="${(part??'').toString().replace(/"/g,'&quot;')}" title="Copy part # and open Planning (Expeditor)">&#8599;</button>`;
+const EXPEDITOR_URL='https://camco-expeditor.netlify.app/';
 function deptName(id){ return (DEPT[id]&&DEPT[id].name)||(id==0?'(Unassigned)':'Dept '+id); }
 function deptRate(id){ if(id in deptOverride) return deptOverride[id]; if(DEPT[id]) return DEPT[id].rate; return WAGE; }
 function soDeptIdx(){ if(SODEPT) return SODEPT; SODEPT={}; ((D&&D.soDept)||[]).forEach(r=>{(SODEPT[r.son]=SODEPT[r.son]||[]).push(r);}); return SODEPT; }
@@ -473,6 +522,47 @@ DRAW.overview=function(w){
   tableify('t_loss',a.lossJobs,[['so','SO#','t'],['part','Part','part'],['customer','Customer','t'],['rev','Rev','$'],['pl','Loss','$$'],['margin','Mgn%','p1'],['closed','Closed','t']],null,'s_loss');
   tableify('t_part',a.byPart,[['part','Part','part'],['customer','Customer','t'],['jobs','Jobs','n'],['rev','Revenue','$'],['pl','Profit','$$'],['dw','Margin','p1']],'rev','s_part');
 };
+DRAW.worst=function(w){
+  const rows=soIn(w).filter(r=>!isRework(r.so));
+  const m=new Map();
+  rows.forEach(r=>{ let o=m.get(r.part); if(!o){o={part:r.part,customer:r.customer||'',jobs:0,rev:0,cost:0,pl:0,pcs:0};m.set(r.part,o);} o.jobs++; o.rev+=r.rev||0; o.cost+=r.appCost||0; o.pl+=r.pl||0; o.pcs+=(r.qtyStock>0?r.qtyStock:r.qty)||0; if(!o.customer&&r.customer)o.customer=r.customer; });
+  // trend: last 12 mo vs the 12 before (fixed windows, independent of the ranking window)
+  const w1s=monthsAgo(12), w0s=monthsAgo(24), tw={};
+  (D.so||[]).forEach(r=>{ if(isRework(r.so)||!r.closed) return; if(r.closed>=w1s&&r.closed<=TODAY){ (tw[r.part]=tw[r.part]||{c:0,p:0}).c+=r.pl||0; } else if(r.closed>=w0s&&r.closed<w1s){ (tw[r.part]=tw[r.part]||{c:0,p:0}).p+=r.pl||0; } });
+  let arr=[...m.values()].filter(o=>o.pl<0).map(o=>{ const t=tw[o.part]||{c:0,p:0}; let trend='fl'; if(t.c>t.p+1)trend='up'; else if(t.c<t.p-1)trend='dn'; return {...o,loss:-o.pl,losspc:o.pcs>0?(-o.pl)/o.pcs:null,trend}; });
+  arr.sort((a,b)=>b.loss-a.loss); arr=arr.slice(0,20);
+  const totLoss=arr.reduce((s,o)=>s+o.loss,0), totJobs=arr.reduce((s,o)=>s+o.jobs,0), totRev=arr.reduce((s,o)=>s+o.rev,0);
+  const kc=(l,v,c)=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c||''}">${v}</div></div>`;
+  const wk=$('#w_kpis'); if(wk) wk.innerHTML=kc('Loss-making parts',fmtN(arr.length))+kc('Total loss (top 20)','&minus;'+fmtUSD(totLoss),'neg')+kc('Revenue at risk',fmtUSD(totRev))+kc('Jobs run',fmtN(totJobs));
+  const tA=t=>t==='up'?'<span class="trend-up">&#9650; improving</span>':(t==='dn'?'<span class="trend-dn">&#9660; worsening</span>':'<span class="trend-fl">&#8212; flat</span>');
+  function draw(q){ q=(q||'').toLowerCase();
+    const d=arr.filter(o=>!q||o.part.toLowerCase().includes(q)||(o.customer||'').toLowerCase().includes(q));
+    const el=$('#t_worst'); if(!el) return;
+    el.innerHTML='<thead><tr><th>Part</th><th>Customer</th><th>Jobs</th><th>Revenue</th><th>Cost</th><th>Total loss</th><th>Loss / pc</th><th>Trend (12mo vs prior)</th></tr></thead><tbody>'+
+      (d.length?d.map(o=>`<tr><td><span class="plink" data-part="${o.part.replace(/"/g,'&quot;')}">${o.part}</span>${xpBtn(o.part)}</td><td>${o.customer||''}</td><td>${fmtN(o.jobs)}</td><td>${fmtUSD(o.rev)}</td><td>${fmtUSD(o.cost)}</td><td class="neg">&minus;${fmtUSD(o.loss)}</td><td class="neg">${o.losspc==null?'':fmtUSD(o.losspc,2)}</td><td>${tA(o.trend)}</td></tr>`).join(''):'<tr><td colspan="8" class="muted" style="text-align:center;padding:16px;">No loss-making parts in this window &mdash; nice.</td></tr>')+'</tbody>';
+  }
+  draw(''); const si=$('#s_worst'); if(si) si.oninput=e=>draw(e.target.value);
+};
+DRAW.cmargin=function(){
+  const all=(D.so||[]).filter(r=>r.closed&&!isRework(r.so));
+  const yq=d=>d.slice(0,4)+' Q'+(Math.floor((+d.slice(5,7)-1)/3)+1);
+  const crev=new Map(); all.forEach(r=>crev.set(r.customer||'(none)',(crev.get(r.customer||'(none)')||0)+(r.rev||0)));
+  const top=[...crev.entries()].sort((a,b)=>b[1]-a[1]).slice(0,7).map(e=>e[0]);
+  const qset=new Set(); all.forEach(r=>qset.add(yq(r.closed))); const quarters=[...qset].sort();
+  const agg={}; all.forEach(r=>{ const c=r.customer||'(none)', q=yq(r.closed); (agg[c]=agg[c]||{}); (agg[c][q]=agg[c][q]||{rev:0,pl:0}); agg[c][q].rev+=r.rev||0; agg[c][q].pl+=r.pl||0; });
+  const pal=[C.blue,C.green,C.red,C.amber,C.purple,C.slate,'#0891b2'];
+  const datasets=top.map((c,i)=>({label:c,data:quarters.map(q=>{const o=agg[c]&&agg[c][q];return o&&o.rev>0?+(o.pl/o.rev*100).toFixed(1):null;}),borderColor:pal[i%pal.length],backgroundColor:pal[i%pal.length],spanGaps:true,tension:.25,borderWidth:2,pointRadius:2}));
+  mkChart('c_cmargin',{type:'line',data:{labels:quarters,datasets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{y:{ticks:{callback:v=>v+'%'},grid:{color:C.grid}},x:{grid:{display:false}}}}});
+  const w1s=monthsAgo(12), w0s=monthsAgo(24), cm={};
+  all.forEach(r=>{ const c=r.customer||'(none)'; cm[c]=cm[c]||{now:{rev:0,pl:0},prev:{rev:0,pl:0},jobs:0}; if(r.closed>=w1s&&r.closed<=TODAY){cm[c].now.rev+=r.rev||0;cm[c].now.pl+=r.pl||0;cm[c].jobs++;} else if(r.closed>=w0s&&r.closed<w1s){cm[c].prev.rev+=r.rev||0;cm[c].prev.pl+=r.pl||0;} });
+  let rowsArr=Object.entries(cm).map(([c,o])=>{ const mnow=o.now.rev>0?o.now.pl/o.now.rev*100:null, mprev=o.prev.rev>0?o.prev.pl/o.prev.rev*100:null; const delta=(mnow!=null&&mprev!=null)?mnow-mprev:null; return {customer:c,jobs:o.jobs,revNow:o.now.rev,mnow,mprev,delta,flag:delta!=null&&delta<-5}; }).filter(o=>o.revNow>0||o.mprev!=null);
+  rowsArr.sort((a,b)=> (a.flag===b.flag)?((a.delta==null?99:a.delta)-(b.delta==null?99:b.delta)):(a.flag?-1:1));
+  function draw(q){ q=(q||'').toLowerCase(); const d=rowsArr.filter(o=>!q||o.customer.toLowerCase().includes(q)); const el=$('#t_cmargin'); if(!el) return;
+    el.innerHTML='<thead><tr><th>Customer</th><th>Jobs (12mo)</th><th>Rev (12mo)</th><th>Margin now</th><th>Margin prior</th><th>&Delta; pts</th><th>Flag</th></tr></thead><tbody>'+
+     d.map(o=>`<tr><td>${o.customer}</td><td>${fmtN(o.jobs)}</td><td>${fmtUSD(o.revNow)}</td><td class="${o.mnow<0?'neg':'pos'}">${o.mnow==null?'&ndash;':o.mnow.toFixed(1)+'%'}</td><td class="${o.mprev<0?'neg':'pos'}">${o.mprev==null?'&ndash;':o.mprev.toFixed(1)+'%'}</td><td class="${o.delta<0?'neg':'pos'}">${o.delta==null?'&ndash;':(o.delta>=0?'+':'')+o.delta.toFixed(1)}</td><td>${o.flag?'<span class="trend-dn">&#9660; down &gt;5 pts</span>':''}</td></tr>`).join('')+'</tbody>';
+  }
+  draw(''); const si=$('#s_cmargin'); if(si) si.oninput=e=>draw(e.target.value);
+};
 DRAW.revenue=function(w){
   const a=aggRevenue(w);
   mkChart('c_revm',{type:'bar',data:{labels:a.byMonth.map(r=>r.ym),datasets:[{label:'Revenue',data:a.byMonth.map(r=>r.rev),backgroundColor:C.blue}]},options:baseOpts({plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>fmtUSD(c.parsed.y)}}}})});
@@ -573,7 +663,7 @@ DRAW.lookup=function(w){
     const ops=(D.ops||[]).filter(o=>o.son===p.so).sort((a,b)=>b.hrs-a.hrs);
     const row=(l,t,cls='',str=false)=>`<tr${str?' style="border-top:2px solid var(--line);font-weight:700;"':''}><td>${l}</td><td class="${cls}">${fmtUSD(t)}</td><td class="muted">${per(t)==null?'':fmtUSD(per(t),2)}</td></tr>`;
     return `<div style="background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;box-shadow:var(--shadow);">
-      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline;"><div><span style="font-size:18px;font-weight:700;">${p.part}</span> <span class="muted">&middot; ${p.customer||''}</span></div><div class="muted" style="font-size:13px;">Last SO <b>${p.so}</b> &middot; ${p.closed} &middot; qty <b>${fmtN(p.qty)}</b></div></div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;align-items:baseline;"><div><span style="font-size:18px;font-weight:700;">${p.part}</span>${xpBtn(p.part)} <span class="muted">&middot; ${p.customer||''}</span></div><div class="muted" style="font-size:13px;">Last SO <b>${p.so}</b> &middot; ${p.closed} &middot; qty <b>${fmtN(p.qty)}</b></div></div>
       <div class="split" style="margin-top:14px;">
         <div><div class="section-title" style="margin-bottom:6px;">Cost build-up <span class="muted" style="font-weight:400;font-size:12px;">(total &middot; per pc)</span></div>
         <table><thead><tr><th>Component</th><th>Total</th><th>Per pc</th></tr></thead><tbody>
@@ -828,7 +918,7 @@ function tableify(tid,rows,cols,sortKey,searchId,sortDir){
   let sort={key:sortKey,dir:sortDir||-1};
   function cell(r,c){ const v=r[c[0]],t=c[2];
     if(t==='t') return `<td title="${(v??'').toString().replace(/"/g,'')}">${v??''}</td>`;
-    if(t==='part') return `<td><span class="plink" data-part="${(v??'').toString().replace(/"/g,'&quot;')}">${v??''}</span></td>`;
+    if(t==='part') return `<td><span class="plink" data-part="${(v??'').toString().replace(/"/g,'&quot;')}">${v??''}</span>${xpBtn(v)}</td>`;
     if(t==='n') return `<td>${fmtN(v)}</td>`;
     if(t==='n1') return `<td>${v==null?'':Number(v).toLocaleString('en-US',{maximumFractionDigits:1})}</td>`;
     if(t==='p1'){ const cls=v<0?'neg':(v>0?'pos':''); return `<td class="${cls}">${v==null?'':Number(v).toFixed(1)+'%'}</td>`; }
@@ -860,7 +950,7 @@ function boot(){
     t.classList.add('active'); $('#p-'+t.dataset.p).classList.add('active');
     if(t.dataset.p!=='notes') activeTab=t.dataset.p;
   });
-  document.addEventListener('click',e=>{ const so=e.target.closest&&e.target.closest('.solink'); if(so){ openCostingReview(so.dataset.so); return; } const el=e.target.closest&&e.target.closest('.plink'); if(el) openPartModal(el.dataset.part); });
+  document.addEventListener('click',e=>{ const xb=e.target.closest&&e.target.closest('.xplink'); if(xb){ e.preventDefault(); e.stopPropagation(); const p=xb.dataset.part||''; try{ if(navigator.clipboard&&navigator.clipboard.writeText) navigator.clipboard.writeText(p); }catch(_){} window.open(EXPEDITOR_URL,'_blank'); return; } const so=e.target.closest&&e.target.closest('.solink'); if(so){ openCostingReview(so.dataset.so); return; } const el=e.target.closest&&e.target.closest('.plink'); if(el) openPartModal(el.dataset.part); });
   $('#pmodal').onclick=e=>{ if(e.target.id==='pmodal') closePartModal(); };
   document.addEventListener('keydown',e=>{ if(e.key==='Escape') closePartModal(); });
 }
