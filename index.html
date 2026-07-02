@@ -587,16 +587,17 @@ DRAW.lookup=function(w){
 let SODA=null; function soActIdx(){ if(SODA) return SODA; SODA={}; ((D&&D.soAct)||[]).forEach(r=>SODA[r.son]=r); return SODA; }
 let TEST_PART=null, TEST_SOS=[];
 function partDepts(sos){ const di=soDeptIdx(), s=new Set(); sos.forEach(r=>{(di[rstrip(r.so)]||[]).forEach(d=>s.add(+d.dept));}); return [...s].sort((a,b)=>deptName(a).localeCompare(deptName(b))); }
-function stdAvg(sos){ const di=soDeptIdx(), agg={}; let totQty=0,n=0; sos.forEach(r=>{ (di[rstrip(r.so)]||[]).forEach(d=>{ const o=agg[d.dept]=agg[d.dept]||{run:0,setup:0}; o.run+=d.run||0; o.setup+=d.setup||0; }); totQty+=r.qty||0; n++; }); const std={}; Object.keys(agg).forEach(k=>std[k]={runpc:totQty>0?agg[k].run/totQty:0, setup:n>0?agg[k].setup/n:0}); return std; }
-function stdSO(r){ const di=soDeptIdx(), q=r?r.qty||0:0, std={}; if(r) (di[rstrip(r.so)]||[]).forEach(d=>std[d.dept]={runpc:q>0?(d.run||0)/q:0, setup:d.setup||0}); return std; }
+function stdAvg(sos){ const di=soDeptIdx(), agg={}; let totQty=0,n=0; sos.forEach(r=>{ (di[rstrip(r.so)]||[]).forEach(d=>{ const o=agg[d.dept]=agg[d.dept]||{run:0,setup:0,ovh:0}; o.run+=d.run||0; o.setup+=d.setup||0; o.ovh+=d.ovh||0; }); totQty+=r.qty||0; n++; }); const std={}; Object.keys(agg).forEach(k=>std[k]={runpc:totQty>0?agg[k].run/totQty:0, ovhpc:totQty>0?agg[k].ovh/totQty:0, setup:n>0?agg[k].setup/n:0}); return std; }
+function stdSO(r){ const di=soDeptIdx(), q=r?r.qty||0:0, std={}; if(r) (di[rstrip(r.so)]||[]).forEach(d=>std[d.dept]={runpc:q>0?(d.run||0)/q:0, ovhpc:q>0?(d.ovh||0)/q:0, setup:d.setup||0}); return std; }
 function avgMatPc(sos){ let m=0,q=0; sos.forEach(r=>{m+=r.material||0;q+=r.qty||0;}); return q>0?m/q:0; }
+function partYield(sos){ let g=0,o=0; sos.forEach(r=>{g+=r.qtyStock||0;o+=r.qty||0;}); return (o>0&&g>0)?g/o:1; }
 function medQty(sos){ const a=sos.map(r=>r.qty||0).filter(x=>x>0).sort((x,y)=>x-y); return a.length?a[Math.floor(a.length/2)]:100; }
-function setStdInputs(std){ document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|setup)_(.+)$/); if(m){ const o=std[m[2]]||{runpc:0,setup:0}; inp.value=(m[1]==='run'?o.runpc:o.setup).toFixed(m[1]==='run'?4:2); } }); }
-function readStd(){ const std={}; document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|setup)_(.+)$/); if(m){ const id=m[2]; std[id]=std[id]||{runpc:0,setup:0}; if(m[1]==='run')std[id].runpc=+inp.value||0; else std[id].setup=+inp.value||0; } }); return std; }
+function setStdInputs(std){ document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|ovh|setup)_(.+)$/); if(m){ const o=std[m[2]]||{runpc:0,ovhpc:0,setup:0}; const v=m[1]==='run'?o.runpc:(m[1]==='ovh'?o.ovhpc:o.setup); inp.value=(+v).toFixed(m[1]==='setup'?2:4); } }); }
+function readStd(){ const std={}; document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|ovh|setup)_(.+)$/); if(m){ const id=m[2]; std[id]=std[id]||{runpc:0,ovhpc:0,setup:0}; if(m[1]==='run')std[id].runpc=+inp.value||0; else if(m[1]==='ovh')std[id].ovhpc=+inp.value||0; else std[id].setup=+inp.value||0; } }); return std; }
 function renderTestControls(part,sos){
   const depts=partDepts(sos), std=stdAvg(sos);
   const rateRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" class="trate cdate" data-id="${id}" value="${deptRate(id).toFixed(2)}" step="0.25" style="width:72px;"></td><td class="muted">$${(deptRate(id)+SETUP_PREMIUM).toFixed(2)}</td></tr>`).join('');
-  const stdRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" id="std_run_${id}" class="stdh cdate" value="${(std[id]?std[id].runpc:0).toFixed(4)}" step="0.001" style="width:84px;"></td><td><input type="number" id="std_setup_${id}" class="stdh cdate" value="${(std[id]?std[id].setup:0).toFixed(2)}" step="0.1" style="width:72px;"></td></tr>`).join('');
+  const stdRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" id="std_run_${id}" class="stdh cdate" value="${(std[id]?std[id].runpc:0).toFixed(4)}" step="0.001" style="width:76px;"></td><td><input type="number" id="std_ovh_${id}" class="stdh cdate" value="${(std[id]?(std[id].ovhpc||0):0).toFixed(4)}" step="0.001" style="width:76px;"></td><td><input type="number" id="std_setup_${id}" class="stdh cdate" value="${(std[id]?std[id].setup:0).toFixed(2)}" step="0.1" style="width:64px;"></td></tr>`).join('');
   const soOpts=sos.map(r=>`<option value="${r.so}">SO ${r.so} &mdash; ${r.closed} &mdash; qty ${fmtN(r.qty)}</option>`).join('');
   $('#tt_body').innerHTML=`
    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">${part} <span class="muted" style="font-size:13px;font-weight:400;">&middot; ${sos[0].customer||''} &middot; ${sos.length} past SOs</span></div>
@@ -609,9 +610,10 @@ function renderTestControls(part,sos){
          <label>Material $/pc: <input type="number" id="q_matpc" class="cdate" value="${avgMatPc(sos).toFixed(2)}" step="0.01" style="width:84px;"></label>
          <label>Setup premium $/hr: <input type="number" id="tt_prem" class="cdate" value="${SETUP_PREMIUM.toFixed(2)}" step="0.25" min="0" style="width:68px;"></label>
          <label>Target margin %: <input type="number" id="q_margin" class="cdate" value="25" step="1" min="0" max="95" style="width:62px;"></label>
+         <label title="pre-filled from this part's history (good ÷ ordered)">Expected yield %: <input type="number" id="q_yield" class="cdate" value="${(partYield(sos)*100).toFixed(0)}" step="1" min="1" max="100" style="width:62px;"></label>
        </div>
        <div style="margin-top:12px;"><div class="section-title" style="font-size:13px;">Standard hours per department <span class="muted" style="font-weight:400;">(editable)</span></div>
-       <div class="tablewrap" style="max-height:220px;"><table><thead><tr><th>Department</th><th>Run hr/pc</th><th>Setup hr/lot</th></tr></thead><tbody>${stdRows}</tbody></table></div></div>
+       <div class="tablewrap" style="max-height:220px;"><table><thead><tr><th>Department</th><th>Run hr/pc</th><th>OH hr/pc</th><th>Setup hr/lot</th></tr></thead><tbody>${stdRows}</tbody></table></div></div>
      </div>
      <div style="min-width:230px;">
        <div class="section-title">Department rates <span class="muted" style="font-weight:400;font-size:12px;">(editable)</span></div>
@@ -624,13 +626,14 @@ function renderTestControls(part,sos){
 function renderTestOutput(){
   const sos=TEST_SOS, out=$('#tt_output'); if(!out) return;
   const Q=Math.max(1,+($('#q_qty')?$('#q_qty').value:0)||1), matpc=+($('#q_matpc')?$('#q_matpc').value:0)||0, prem=SETUP_PREMIUM;
+  const yPct=Math.min(100,Math.max(1,+($('#q_yield')?$('#q_yield').value:0)||100)), y=yPct/100, Qs=Q/y;
   const std=readStd();
-  let qRun=0,qSet=0,qHrs=0,qSetH=0;
-  Object.keys(std).forEach(id=>{ const rate=deptRate(id), runH=std[id].runpc*Q, setH=std[id].setup, rc=runH*rate, sc=setH*(rate+prem); qRun+=rc;qSet+=sc;qHrs+=runH+setH;qSetH+=setH; });
-  const qMat=matpc*Q, qOH=qHrs*BURDEN, qTot=qMat+qRun+qSet+qOH, qpc=qTot/Q;
+  let qRun=0,qOvhLab=0,qSet=0,qHrs=0;
+  Object.keys(std).forEach(id=>{ const rate=deptRate(id), runH=(std[id].runpc||0)*Qs, ovhH=(std[id].ovhpc||0)*Qs, setH=std[id].setup||0; qRun+=runH*rate; qOvhLab+=ovhH*rate; qSet+=setH*(rate+prem); qHrs+=runH+ovhH+setH; });
+  const qMat=matpc*Qs, qOH=qHrs*BURDEN, qTot=qMat+qRun+qOvhLab+qSet+qOH, qpc=qTot/Q;
   const margin=Math.min(95,Math.max(0,+($('#q_margin')?$('#q_margin').value:0)||0));
   const price=margin<100?qTot/(1-margin/100):qTot, pricePc=price/Q;
-  let sumRev=0,sumQ=0; sos.forEach(r=>{sumRev+=r.rev||0;sumQ+=r.qty||0;}); const avgRevPc=sumQ>0?sumRev/sumQ:null;
+  let sumRev=0,sumQG=0; sos.forEach(r=>{sumRev+=r.rev||0;sumQG+=(r.qtyStock>0?r.qtyStock:r.qty)||0;}); const avgRevPc=sumQG>0?sumRev/sumQG:null;
   const ai=soActIdx(), di=soDeptIdx(); let sumPc=0,cntPc=0;
   const arows=sos.map(r=>{ const son=rstrip(r.so), a=ai[son], dd=di[son]||[];
     const runH=dd.reduce((s,d)=>s+(d.run||0),0), setH=dd.reduce((s,d)=>s+(d.setup||0),0), ovhH=dd.reduce((s,d)=>s+(d.ovh||0),0);
@@ -645,16 +648,17 @@ function renderTestOutput(){
   out.innerHTML=`
    <div class="split">
      <div>
-       <div class="section-title">Quote (our method) &mdash; ${fmtN(Q)} pcs</div>
-       <table><thead><tr><th>Bucket</th><th>For ${fmtN(Q)}</th><th>Per pc</th></tr></thead><tbody>
-         ${qb('Material',qMat,matpc)}
+       <div class="section-title">Quote (our method) &mdash; ${fmtN(Q)} good pcs <span class="muted" style="font-weight:400;font-size:12px;">(make ${fmtN(Math.round(Qs))} at ${yPct}% yield)</span></div>
+       <table><thead><tr><th>Bucket</th><th>For ${fmtN(Q)}</th><th>Per good pc</th></tr></thead><tbody>
+         ${qb('Material',qMat,qMat/Q)}
          ${qb('Run labor',qRun,qRun/Q)}
+         ${qb('Indirect labor (overhead hrs)',qOvhLab,qOvhLab/Q)}
          ${qb('Setup labor (per lot)',qSet,qSet/Q)}
-         ${qb('Overhead',qOH,qOH/Q)}
+         ${qb('Overhead (burden)',qOH,qOH/Q)}
          ${qb('= Quoted cost',qTot,qpc,true)}
          <tr style="font-weight:700;color:#1a7f45;background:#f0f9f2;"><td>Quoted PRICE (${margin}% margin)</td><td>${fmtUSD(price)}</td><td>${fmtUSD(pricePc,2)}</td></tr>
        </tbody></table>
-       <div class="muted" style="font-size:11.5px;margin-top:6px;">Run at each dept rate; setup at rate + $${prem.toFixed(2)}; overhead $${BURDEN.toFixed(2)}/hr &times; ${fmtH(qHrs)} hrs. Setup is per-lot (${fmtUSD(qSet)}), spread over ${fmtN(Q)} pcs here.</div>
+       <div class="muted" style="font-size:11.5px;margin-top:6px;">To ship <b>${fmtN(Q)}</b> good parts you make <b>${fmtN(Math.round(Qs))}</b> at <b>${yPct}%</b> yield &mdash; material, run &amp; indirect labor scale with parts made; setup is once per lot. Overhead = $${BURDEN.toFixed(2)}/hr &times; ${fmtH(qHrs)} hrs. Everything is per <b>good</b> part.</div>
      </div>
      <div>
        <div class="section-title">Quote vs actual</div>
