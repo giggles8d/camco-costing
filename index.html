@@ -287,11 +287,14 @@ const soIn=w=>(D.so||[]).filter(r=>r.closed&&inWin(r.closed,w));
 // ---- adjustable burden rate (what-if) ----
 const WAGE = (D&&D.rates)?D.rates.directWage:21.35;
 const STORED_BURDEN = (D&&D.rates)?D.rates.burdenRate:79.03;
-let BURDEN = 100;                 // burden $/direct hr — editable on the site
+let BURDEN = 100;                 // burden $/direct hr for SOs closed on/after the cutoff
+let BURDEN_PRE = STORED_BURDEN;   // burden $/direct hr for SOs closed before the cutoff
+let BURDEN_CUTOFF = '2026-01-01'; // cutoff date
+const burdenAt=c=>(c&&c>=BURDEN_CUTOFF)?BURDEN:BURDEN_PRE;   // burden rate for an SO by its close date
 const allInRate=()=>WAGE+BURDEN;
-const soBurden=r=>(r.hrs||0)*BURDEN;
+const soBurden=r=>(r.hrs||0)*burdenAt(r.closed);
 const soLabor =r=>(r.hrs||0)*WAGE;
-const soAcc   =r=>(r.material||0)+(r.hrs||0)*(WAGE+BURDEN);
+const soAcc   =r=>(r.material||0)+(r.hrs||0)*(WAGE+burdenAt(r.closed));
 
 // ---- Test tab: department rates + setup premium (what-if) ----
 let SETUP_PREMIUM = 2.5;
@@ -318,9 +321,12 @@ function renderGbar(){
     `<span class="muted ctl-range" style="margin-left:auto;">showing ${cur.label} &middot; ${cur.start} &rarr; ${cur.end}</span>`+
     `<span style="flex-basis:100%;height:0;"></span>`+
     `<span class="gttl">Burden $/hr (what-if):</span>`+
-    `<input type="number" id="burdenIn" value="${BURDEN}" step="1" min="0" class="cdate" style="width:74px;">`+
-    `<button class="chgbtn" id="burdenReset">Reset to DB ($${STORED_BURDEN.toFixed(2)})</button>`+
-    `<span class="muted" style="font-size:12px;">all-in $${allInRate().toFixed(2)}/hr = $${WAGE.toFixed(2)} wage + $${BURDEN.toFixed(2)} burden &middot; affects Accurate Cost, Part Lookup &amp; part drill-downs</span>`;
+    `<input type="number" id="burdenIn" value="${BURDEN}" step="1" min="0" class="cdate" style="width:66px;">`+
+    `<span class="muted" style="font-size:12px;">for SOs closed on/after</span>`+
+    `<input type="date" id="burdenCut" value="${BURDEN_CUTOFF}" class="cdate">`+
+    `<span class="muted" style="font-size:12px;">; before, use $</span>`+
+    `<input type="number" id="burdenPre" value="${BURDEN_PRE}" step="0.01" min="0" class="cdate" style="width:66px;">`+
+    `<span class="muted" style="font-size:12px;">&middot; + wage $${WAGE.toFixed(2)} = all-in $${(WAGE+BURDEN).toFixed(2)} / $${(WAGE+BURDEN_PRE).toFixed(2)}</span>`;
 }
 function renderTabCtl(tab){
   const el=$('#ctl-'+tab); if(!el) return;
@@ -360,6 +366,8 @@ let LAST_PART=null;
 function applyBurden(){ DRAW.accurate(effWin('accurate')); DRAW.lookup(effWin('lookup')); if(TEST_PART&&$('#tt_output')) renderTestOutput(); if($('#pmodal').classList.contains('open')&&LAST_PART) openPartModal(LAST_PART); }
 document.addEventListener('change',e=>{
   if(e.target.id==='burdenIn'){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0){ BURDEN=v; renderGbar(); applyBurden(); } }
+  else if(e.target.id==='burdenCut'){ if(e.target.value){ BURDEN_CUTOFF=e.target.value; renderGbar(); applyBurden(); } }
+  else if(e.target.id==='burdenPre'){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0){ BURDEN_PRE=v; renderGbar(); applyBurden(); } }
   else if(e.target.closest&&e.target.closest('#tt_body')){
     if(e.target.classList.contains('trate')){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0) deptOverride[e.target.dataset.id]=v; }
     else if(e.target.id==='tt_prem'){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0) SETUP_PREMIUM=v; }
@@ -515,11 +523,8 @@ DRAW.quote=function(w){
 };
 DRAW.accurate=function(w){
   const a=aggAccurate(w), k=a.k, rt=D.rates;
-  const bd=new Date(rt.burdenDate), gen=new Date((D.generatedAt||'').replace(' ','T')); const months=Math.round((gen-bd)/(1000*60*60*24*30.4)); const stale=months>=2;
-  const modeling=Math.abs(BURDEN-rt.burdenRate)>0.005;
-  $('#burdenflag').innerHTML='<b>Burden rate in use: $'+BURDEN.toFixed(2)+'/direct hr</b> (all-in $'+allInRate().toFixed(2)+' = $'+WAGE.toFixed(2)+' wage + $'+BURDEN.toFixed(2)+' burden). '+(modeling?'<b>What-if scenario</b> &mdash; the maintained DB rate is $'+rt.burdenRate.toFixed(2)+' (set '+rt.burdenDate+'). ':'Matches the maintained DB rate (set '+rt.burdenDate+'). ')+'Change the burden at the top of the page to model outcomes.';
-  if(modeling){$('#burdenflag').style.background='#f3f0fb';$('#burdenflag').style.borderColor='#ddd2f5';$('#burdenflag').style.color='#5b21b6';}
-  else if(stale){$('#burdenflag').style.background='#fef2f2';$('#burdenflag').style.borderColor='#fbcaca';$('#burdenflag').style.color='#991b1b';}
+  $('#burdenflag').innerHTML='<b>Burden rate: $'+BURDEN.toFixed(2)+'/hr for SOs closed on/after '+BURDEN_CUTOFF+', $'+BURDEN_PRE.toFixed(2)+'/hr before</b> (+ wage $'+WAGE.toFixed(2)+' = all-in $'+allInRate().toFixed(2)+' / $'+(WAGE+BURDEN_PRE).toFixed(2)+'). Maintained DB rate is $'+rt.burdenRate.toFixed(2)+' (set '+rt.burdenDate+'). Adjust the rates and cutoff at the top of the page.';
+  $('#burdenflag').style.background='#f3f0fb';$('#burdenflag').style.borderColor='#ddd2f5';$('#burdenflag').style.color='#5b21b6';
   const accM=k.rev?(k.rev-k.accurateCost)/k.rev*100:0, appM=k.rev?k.appPL/k.rev*100:0;
   $('#a_kpis').innerHTML=[
     ['Jobs costed',fmtN(k.jobsWithHrs)+' / '+fmtN(k.jobs),'with clocked hours',''],
@@ -565,7 +570,7 @@ DRAW.lookup=function(w){
           <tr><td style="padding-left:22px;" class="muted">&bull; Purchase orders</td><td class="muted">${fmtUSD(p.poMat)}</td><td></td></tr>
           <tr><td style="padding-left:22px;" class="muted">&bull; Other-direct</td><td class="muted">${fmtUSD(p.odcMat)}</td><td></td></tr>
           ${row('Direct labor ('+p.hrs.toFixed(1)+' hrs &times; $'+WAGE.toFixed(2)+')',soLabor(p))}
-          ${row('Overhead burden ('+p.hrs.toFixed(1)+' hrs &times; $'+BURDEN.toFixed(2)+')',soBurden(p))}
+          ${row('Overhead burden ('+p.hrs.toFixed(1)+' hrs &times; $'+burdenAt(p.closed).toFixed(2)+')',soBurden(p))}
           ${row('= Accurate cost',accurate,'',true)}
           ${row('App cost (current system)',p.appCost)}
           <tr style="border-top:2px solid var(--line);"><td>Revenue (billed)</td><td>${fmtUSD(p.rev)}</td><td class="muted">${per(p.rev)==null?'':fmtUSD(per(p.rev),2)}</td></tr>
@@ -628,15 +633,15 @@ function renderTestOutput(){
   let sumRev=0,sumQ=0; sos.forEach(r=>{sumRev+=r.rev||0;sumQ+=r.qty||0;}); const avgRevPc=sumQ>0?sumRev/sumQ:null;
   const ai=soActIdx(), di=soDeptIdx(); let sumPc=0,cntPc=0;
   const arows=sos.map(r=>{ const son=rstrip(r.so), a=ai[son], dd=di[son]||[];
-    const runH=dd.reduce((s,d)=>s+(d.run||0),0), setH=dd.reduce((s,d)=>s+(d.setup||0),0);
-    const lab=a?(a.actRun+a.actSetup):0, totHrs=a?a.totHrs:(runH+setH), oh=totHrs*BURDEN, mat=r.material||0, tot=mat+lab+oh;
-    const pc=r.qty>0?tot/r.qty:null, cov=a&&a.totHrs>0?a.realHrs/a.totHrs:null, margin=r.rev>0?(r.rev-tot)/r.rev*100:null;
+    const runH=dd.reduce((s,d)=>s+(d.run||0),0), setH=dd.reduce((s,d)=>s+(d.setup||0),0), ovhH=dd.reduce((s,d)=>s+(d.ovh||0),0);
+    const lab=a?((+a.actRun||0)+(+a.actSetup||0)+(+a.actOvh||0)):0, totHrs=a?a.totHrs:(runH+setH+ovhH), oh=totHrs*burdenAt(r.closed), mat=r.material||0, tot=mat+lab+oh;
+    const good=r.qtyStock>0?r.qtyStock:r.qty, pc=good>0?tot/good:null, cov=a&&a.totHrs>0?a.realHrs/a.totHrs:null, margin=r.rev>0?(r.rev-tot)/r.rev*100:null;
     if(pc!=null){sumPc+=pc;cntPc++;}
-    return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,lab,cov,mat,oh,tot,pc,margin}; });
+    return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,ovhH,lab,cov,mat,oh,tot,pc,margin}; });
   const avgPc=cntPc?sumPc/cntPc:null;
   const qk=(l,v,c='')=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}" style="font-size:18px;">${v}</div></div>`;
   const qb=(l,forQ,pc,str=false)=>`<tr${str?' style="border-top:2px solid var(--line);font-weight:700;"':''}><td>${l}</td><td>${fmtUSD(forQ)}</td><td class="muted">${pc==null?'':fmtUSD(pc,2)}</td></tr>`;
-  const arow=r=>`<tr><td><span class="solink" data-so="${r.so}">${r.so}</span></td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
+  const arow=r=>`<tr><td><span class="solink" data-so="${r.so}">${r.so}</span></td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtH(r.ovhH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
   out.innerHTML=`
    <div class="split">
      <div>
@@ -662,8 +667,8 @@ function renderTestOutput(){
        <div class="muted" style="font-size:11.5px;margin-top:8px;">Calibrate the standard hours/rates until <b>quoted cost/pc</b> lands on <b>actual avg cost/pc</b>, then the margin gives your <b>price</b>. If quoted cost is below actual, the method is under-costing (actuals use real operator rates &mdash; ~8% above dept averages). Margin: price = cost &divide; (1 &minus; margin%).</div>
      </div>
    </div>
-   <div style="margin-top:18px;"><div class="section-title">Actual cost of past shop orders <span class="muted" style="font-weight:400;font-size:12px;">(operator real rates; overhead at $${BURDEN.toFixed(2)}/hr)</span></div>
-     <div class="tablewrap"><table><thead><tr><th>SO#</th><th>Closed</th><th>Qty</th><th>Run h</th><th>Setup h</th><th>Actual labor</th><th>Rate cov.</th><th>Material</th><th>Overhead</th><th>Total cost</th><th>Cost/pc</th><th>Margin</th></tr></thead><tbody>${arows.map(arow).join('')}</tbody></table></div>
+   <div style="margin-top:18px;"><div class="section-title">Actual cost of past shop orders <span class="muted" style="font-weight:400;font-size:12px;">(operator real rates; overhead $${BURDEN_PRE.toFixed(2)}/hr, or $${BURDEN.toFixed(2)} on/after ${BURDEN_CUTOFF})</span></div>
+     <div class="tablewrap"><table><thead><tr><th>SO#</th><th>Closed</th><th>Qty</th><th>Run h</th><th>Setup h</th><th>OH h</th><th>Actual labor</th><th>Rate cov.</th><th>Material</th><th>Overhead</th><th>Total cost</th><th>Cost/pc</th><th>Margin</th></tr></thead><tbody>${arows.map(arow).join('')}</tbody></table></div>
    </div>`;
 }
 DRAW.test=function(w){
@@ -701,7 +706,7 @@ function openPartModal(part){
     <div style="font-size:18px;font-weight:700;">${part} <span class="muted" style="font-size:13px;font-weight:400;">&middot; ${rows[0].customer||''} &middot; ${rows.length} SOs &middot; ${effWin(activeTab).label}</span></div>
     <div class="kpis" style="margin:12px 0;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));">${kpi('Revenue',fmtUSD(rev))}${kpi('App cost',fmtUSD(app))}${kpi('Accurate cost',fmtUSD(acc))}${kpi('Profit (app)',fmtUSD(pl),pl<0?'neg':'pos')}${kpi('Margin (app)',m==null?'':m.toFixed(1)+'%',m<0?'neg':'pos')}${kpi('Margin (accurate)',accm==null?'':accm.toFixed(1)+'%',accm<0?'neg':'pos')}</div>
     <div class="tablewrap" style="max-height:58vh;"><table><thead><tr><th>SO#</th><th>Closed</th><th>Qty</th><th>Revenue</th><th>App cost</th><th>Material</th><th>Labor hrs</th><th>Burden</th><th>Accurate cost</th><th>Profit</th><th>Margin</th></tr></thead><tbody>${body}</tbody></table></div>
-    <div class="muted" style="font-size:11.5px;margin-top:8px;">Profit/Margin on app-cost basis. Accurate cost = material + clocked hrs &times; $${allInRate().toFixed(2)} all-in (burden $${BURDEN.toFixed(2)}/hr).</div>`;
+    <div class="muted" style="font-size:11.5px;margin-top:8px;">Profit/Margin on app-cost basis. Accurate cost = material + clocked hrs &times; (wage $${WAGE.toFixed(2)} + burden). Burden = $${BURDEN.toFixed(2)}/hr for SOs closed on/after ${BURDEN_CUTOFF}, $${BURDEN_PRE.toFixed(2)} before.</div>`;
   $('#pmodal').classList.add('open');
 }
 
@@ -720,7 +725,9 @@ function openCostingReview(so){
   const lines=[...(poIdx()[son]||[]),...(odcIdx()[son]||[])];
   const qty=row.qty||0, good=row.qtyStock>0?row.qtyStock:qty, scrap=Math.max(0,qty-(row.qtyStock||0));
   let setup=0,ovh=0,prod=0; emps.forEach(e=>{setup+=+e.s||0;ovh+=+e.o||0;prod+=+e.p||0;}); const totH=setup+ovh+prod;
-  const material=row.material||0, prodCost=totH*WAGE, ovhCost=totH*BURDEN, totalCost=material+prodCost+ovhCost;
+  const aA=soActIdx()[son];
+  const bRate=burdenAt(row.closed);
+  const material=row.material||0, prodCost=aA?((+aA.actRun||0)+(+aA.actSetup||0)+(+aA.actOvh||0)):(totH*WAGE), ovhCost=totH*bRate, totalCost=material+prodCost+ovhCost;
   const camcoPc=good>0?totalCost/good:null, price=(row.pricePer>0?row.pricePer:(good>0?row.rev/good:null)), margin=(price>0&&camcoPc!=null)?(price-camcoPc)/price*100:null;
   const u=useIdx()[row.part]||{};
   const box=(l,v,c='')=>`<div class="crbox"><div class="l">${l}</div><div class="v ${c}">${v}</div></div>`;
@@ -745,13 +752,13 @@ function openCostingReview(so){
         ${lines.length?`<div class="tablewrap" style="max-height:220px;"><table><thead><tr><th>Description</th><th>Batch cost</th><th>Cost/pc</th><th>PO#</th></tr></thead><tbody>${lrows}</tbody></table></div>`:'<div class="muted" style="font-size:13px;">No direct-cost lines recorded.</div>'}
         <div class="tablewrap" style="margin-top:12px;"><table><tbody>
           <tr><td>Material (direct)</td><td style="text-align:right">${fmtUSD(material)}</td></tr>
-          <tr><td>Total production cost (${totH.toFixed(1)} hrs &times; $${WAGE.toFixed(2)})</td><td style="text-align:right">${fmtUSD(prodCost)}</td></tr>
-          <tr><td>Total overhead cost (${totH.toFixed(1)} hrs &times; $${BURDEN.toFixed(2)})</td><td style="text-align:right">${fmtUSD(ovhCost)}</td></tr>
+          <tr><td>Total production cost (operator labor, ${totH.toFixed(1)} hrs)</td><td style="text-align:right">${fmtUSD(prodCost)}</td></tr>
+          <tr><td>Total overhead cost (${totH.toFixed(1)} hrs &times; $${bRate.toFixed(2)})</td><td style="text-align:right">${fmtUSD(ovhCost)}</td></tr>
           <tr style="font-weight:700;border-top:2px solid var(--line);"><td>Total cost</td><td style="text-align:right">${fmtUSD(totalCost)}</td></tr>
         </tbody></table></div>
       </div>
     </div>
-    <div class="muted" style="font-size:11.5px;margin-top:8px;">Hours: Setup = Set-Up Time, Overhead = Burden Time, Prod = Total Time (per operator). Production cost = hrs &times; wage $${WAGE.toFixed(2)}; overhead = hrs &times; burden $${BURDEN.toFixed(2)} (adjust burden at top). Camco cost/pc = total cost &divide; qty to stock.</div>`;
+    <div class="muted" style="font-size:11.5px;margin-top:8px;">Hours: Setup = Set-Up Time, Overhead = Burden Time, Prod = Total Time (per operator). Production cost = each operator's real pay rate &times; their hours (dept-avg where unknown); overhead = total hrs &times; burden $${bRate.toFixed(2)} (this SO closed ${row.closed}; burden is $${BURDEN.toFixed(2)} on/after ${BURDEN_CUTOFF}, $${BURDEN_PRE.toFixed(2)} before). Camco cost/pc = total cost &divide; qty to stock.</div>`;
   $('#pmodal').classList.add('open');
 }
 
