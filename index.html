@@ -382,7 +382,7 @@ document.addEventListener('change',e=>{
   else if(e.target.closest&&e.target.closest('#tt_body')){
     if(e.target.classList.contains('trate')){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0) deptOverride[e.target.dataset.id]=v; }
     else if(e.target.id==='tt_prem'){ const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0) SETUP_PREMIUM=v; }
-    else if(e.target.id==='q_src'){ const v=e.target.value; const std=(v==='avg')?stdAvg(TEST_SOS):stdSO(TEST_SOS.find(r=>r.so===v)); setStdInputs(std); }
+    else if(e.target.id==='q_src'){ const v=e.target.value; const std=(v==='avg')?stdAvg(TEST_SOS):stdSO(TEST_SOS.find(r=>r.so===v)); setStdInputs(std); const fx=$('#q_fixed'); if(fx){ fx.value=Math.round((v==='avg')?histFixed(TEST_SOS):histFixed([TEST_SOS.find(r=>r.so===v)].filter(Boolean))); } }
     renderTestOutput();
   }
 });
@@ -605,10 +605,14 @@ function partYield(sos){ let g=0,o=0; sos.forEach(r=>{g+=r.qtyStock||0;o+=r.qty|
 function medQty(sos){ const a=sos.map(r=>r.qty||0).filter(x=>x>0).sort((x,y)=>x-y); return a.length?a[Math.floor(a.length/2)]:100; }
 function setStdInputs(std){ document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|ovh|setup)_(.+)$/); if(m){ const o=std[m[2]]||{runpc:0,ovhpc:0,setup:0}; const v=m[1]==='run'?o.runpc:(m[1]==='ovh'?o.ovhpc:o.setup); inp.value=(+v).toFixed(m[1]==='setup'?2:4); } }); }
 function readStd(){ const std={}; document.querySelectorAll('#tt_body .stdh').forEach(inp=>{ const m=inp.id.match(/^std_(run|ovh|setup)_(.+)$/); if(m){ const id=m[2]; std[id]=std[id]||{runpc:0,ovhpc:0,setup:0}; if(m[1]==='run')std[id].runpc=+inp.value||0; else if(m[1]==='ovh')std[id].ovhpc=+inp.value||0; else std[id].setup=+inp.value||0; } }); return std; }
+// Per-lot fixed cost from history = avg over past (non-rework) SOs of
+// (Set-Up + Burden hours) x operator wage  +  those hours x burden rate.  This is the
+// shop's real "cost to run a lot regardless of quantity" — used as the setup basis.
+function histFixed(sos){ const ai=soActIdx(), di=soDeptIdx(); let tot=0,n=0; sos.forEach(r=>{ if(/[Rr]\s*$/.test(String(r.so||'')))return; const son=rstrip(r.so), a=ai[son], dd=di[son]||[]; const fixLab=a?((+a.actSetup||0)+(+a.actOvh||0)):0; const fixHrs=dd.reduce((s,d)=>s+(d.setup||0)+(d.ovh||0),0); const t=fixLab+fixHrs*burdenAt(r.closed); if(t>0){tot+=t;n++;} }); return n?tot/n:0; }
 function renderTestControls(part,sos){
   const depts=partDepts(sos), std=stdAvg(sos);
   const rateRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" class="trate cdate" data-id="${id}" value="${deptRate(id).toFixed(2)}" step="0.25" style="width:72px;"></td><td class="muted">$${(deptRate(id)+SETUP_PREMIUM).toFixed(2)}</td></tr>`).join('');
-  const stdRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" id="std_run_${id}" class="stdh cdate" value="${(std[id]?std[id].runpc:0).toFixed(4)}" step="0.001" style="width:76px;"></td><td><input type="number" id="std_ovh_${id}" class="stdh cdate" value="${(std[id]?(std[id].ovhpc||0):0).toFixed(4)}" step="0.001" style="width:76px;"></td><td><input type="number" id="std_setup_${id}" class="stdh cdate" value="${(std[id]?std[id].setup:0).toFixed(2)}" step="0.1" style="width:64px;"></td></tr>`).join('');
+  const stdRows=depts.map(id=>`<tr><td>${deptName(id)}</td><td><input type="number" id="std_run_${id}" class="stdh cdate" value="${(std[id]?std[id].runpc:0).toFixed(4)}" step="0.001" style="width:76px;"></td></tr>`).join('');
   const soOpts=sos.map(r=>`<option value="${r.so}">SO ${r.so} &mdash; ${r.closed} &mdash; qty ${fmtN(r.qty)}</option>`).join('');
   $('#tt_body').innerHTML=`
    <div style="font-size:16px;font-weight:700;margin-bottom:8px;">${part} <span class="muted" style="font-size:13px;font-weight:400;">&middot; ${sos[0].customer||''} &middot; ${sos.length} past SOs</span></div>
@@ -622,9 +626,10 @@ function renderTestControls(part,sos){
          <label>Setup premium $/hr: <input type="number" id="tt_prem" class="cdate" value="${SETUP_PREMIUM.toFixed(2)}" step="0.25" min="0" style="width:68px;"></label>
          <label>Target margin %: <input type="number" id="q_margin" class="cdate" value="25" step="1" min="0" max="95" style="width:62px;"></label>
          <label title="pre-filled from this part's history (good ÷ ordered)">Expected yield %: <input type="number" id="q_yield" class="cdate" value="${(partYield(sos)*100).toFixed(0)}" step="1" min="1" max="100" style="width:62px;"></label>
+         <label title="Fixed cost of running one lot regardless of quantity — pre-filled from history as (Set-Up + Burden hrs) × wage + overhead. Edit for this quote.">Setup+indirect $/lot: <input type="number" id="q_fixed" class="cdate" value="${histFixed(sos).toFixed(0)}" step="10" min="0" style="width:92px;"></label>
        </div>
-       <div style="margin-top:12px;"><div class="section-title" style="font-size:13px;">Standard hours per department <span class="muted" style="font-weight:400;">(editable)</span></div>
-       <div class="tablewrap" style="max-height:220px;"><table><thead><tr><th>Department</th><th>Run hr/pc</th><th>OH hr/pc</th><th>Setup hr/lot</th></tr></thead><tbody>${stdRows}</tbody></table></div></div>
+       <div style="margin-top:12px;"><div class="section-title" style="font-size:13px;">Standard run hours per department <span class="muted" style="font-weight:400;">(editable · per piece)</span></div>
+       <div class="tablewrap" style="max-height:220px;"><table><thead><tr><th>Department</th><th>Run hr/pc</th></tr></thead><tbody>${stdRows}</tbody></table></div></div>
      </div>
      <div style="min-width:230px;">
        <div class="section-title">Department rates <span class="muted" style="font-weight:400;font-size:12px;">(editable)</span></div>
@@ -639,9 +644,10 @@ function renderTestOutput(){
   const Q=Math.max(1,+($('#q_qty')?$('#q_qty').value:0)||1), matpc=+($('#q_matpc')?$('#q_matpc').value:0)||0, prem=SETUP_PREMIUM;
   const yPct=Math.min(100,Math.max(1,+($('#q_yield')?$('#q_yield').value:0)||100)), y=yPct/100, Qs=Q/y;
   const std=readStd();
-  let qRun=0,qOvhLab=0,qSet=0,qHrs=0;
-  Object.keys(std).forEach(id=>{ const rate=deptRate(id), runH=(std[id].runpc||0)*Qs, ovhH=(std[id].ovhpc||0)*Qs, setH=std[id].setup||0; qRun+=runH*rate; qOvhLab+=ovhH*rate; qSet+=setH*(rate+prem); qHrs+=runH+ovhH+setH; });
-  const qMat=matpc*Qs, qOH=qHrs*BURDEN, qTot=qMat+qRun+qOvhLab+qSet+qOH, qpc=qTot/Q;
+  const qFixed=Math.max(0,+($('#q_fixed')?$('#q_fixed').value:0)||0);  // per-lot fixed cost (history method)
+  let qRun=0,runHrs=0;
+  Object.keys(std).forEach(id=>{ const rate=deptRate(id), runH=(std[id].runpc||0)*Qs; qRun+=runH*rate; runHrs+=runH; });
+  const qMat=matpc*Qs, qRunOH=runHrs*BURDEN, qHrs=runHrs, qTot=qMat+qRun+qRunOH+qFixed, qpc=qTot/Q;
   const margin=Math.min(95,Math.max(0,+($('#q_margin')?$('#q_margin').value:0)||0));
   const price=margin<100?qTot/(1-margin/100):qTot, pricePc=price/Q;
   const isR=s=>/[Rr]\s*$/.test(String(s||''));  // rework SOs (e.g. 23122R) — excluded from actual averages
@@ -654,7 +660,7 @@ function renderTestOutput(){
     if(pc!=null && !isR(r.so)){sumPc+=pc;cntPc++;}
     return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,ovhH,lab,cov,mat,oh,tot,pc,margin,isR:isR(r.so)}; });
   const avgPc=cntPc?sumPc/cntPc:null;
-  LAST_QUOTE={part:TEST_PART, customer:(sos[0]?sos[0].customer:''), Q, Qs, yPct, margin, burden:BURDEN, qMat, qRun, qOvhLab, qSet, qOH, qTot, qpc, price, pricePc, avgPc, avgRevPc};
+  LAST_QUOTE={part:TEST_PART, customer:(sos[0]?sos[0].customer:''), Q, Qs, yPct, margin, burden:BURDEN, qMat, qRun, qRunOH, qFixed, qTot, qpc, price, pricePc, avgPc, avgRevPc};
   const qk=(l,v,c='')=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}" style="font-size:18px;">${v}</div></div>`;
   const qb=(l,forQ,pc,str=false)=>`<tr${str?' style="border-top:2px solid var(--line);font-weight:700;"':''}><td>${l}</td><td>${fmtUSD(forQ)}</td><td class="muted">${pc==null?'':fmtUSD(pc,2)}</td></tr>`;
   const arow=r=>`<tr${r.isR?' class="muted" title="rework SO — excluded from actual averages" style="opacity:.55;"':''}><td><span class="solink" data-so="${r.so}">${r.so}</span>${r.isR?' <span style="font-size:10px;">(rework, excl.)</span>':''}</td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtH(r.ovhH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
@@ -665,13 +671,12 @@ function renderTestOutput(){
        <table><thead><tr><th>Bucket</th><th>For ${fmtN(Q)}</th><th>Per good pc</th></tr></thead><tbody>
          ${qb('Material',qMat,qMat/Q)}
          ${qb('Run labor',qRun,qRun/Q)}
-         ${qb('Indirect labor (overhead hrs)',qOvhLab,qOvhLab/Q)}
-         ${qb('Setup labor (per lot)',qSet,qSet/Q)}
-         ${qb('Overhead (burden)',qOH,qOH/Q)}
+         ${qb('Run overhead (burden)',qRunOH,qRunOH/Q)}
+         ${qb('Setup + indirect (per lot)',qFixed,qFixed/Q)}
          ${qb('= Quoted cost',qTot,qpc,true)}
          <tr style="font-weight:700;color:#1a7f45;background:#f0f9f2;"><td>Quoted PRICE (${margin}% margin)</td><td>${fmtUSD(price)}</td><td>${fmtUSD(pricePc,2)}</td></tr>
        </tbody></table>
-       <div class="muted" style="font-size:11.5px;margin-top:6px;">To ship <b>${fmtN(Q)}</b> good parts you make <b>${fmtN(Math.round(Qs))}</b> at <b>${yPct}%</b> yield &mdash; material, run &amp; indirect labor scale with parts made; setup is once per lot. Overhead = $${BURDEN.toFixed(2)}/hr &times; ${fmtH(qHrs)} hrs. Everything is per <b>good</b> part.</div>
+       <div class="muted" style="font-size:11.5px;margin-top:6px;">To ship <b>${fmtN(Q)}</b> good parts you make <b>${fmtN(Math.round(Qs))}</b> at <b>${yPct}%</b> yield. Material, run labor &amp; run overhead scale with parts made; <b>Setup + indirect is a fixed cost per lot</b> (from this part's history = (setup + burden hrs) × wage + overhead), so it loads heavily on small orders. Run overhead = $${BURDEN.toFixed(2)}/hr × ${fmtH(runHrs)} run hrs.</div>
      </div>
      <div>
        <div style="display:flex;justify-content:space-between;align-items:center;"><span class="section-title" style="margin:0;">Quote vs actual</span><button id="q_print" class="chgbtn">&#128424; Print</button></div>
@@ -710,9 +715,8 @@ function printQuoteReport(){
        <tbody>
          ${row('Material',q.qMat,q.qMat/q.Q)}
          ${row('Run labor',q.qRun,q.qRun/q.Q)}
-         ${row('Indirect labor (overhead hrs)',q.qOvhLab,q.qOvhLab/q.Q)}
-         ${row('Setup labor (per lot)',q.qSet,q.qSet/q.Q)}
-         ${row('Overhead (burden)',q.qOH,q.qOH/q.Q)}
+         ${row('Run overhead (burden)',q.qRunOH,q.qRunOH/q.Q)}
+         ${row('Setup + indirect (per lot)',q.qFixed,q.qFixed/q.Q)}
          ${row('Quoted cost',q.qTot,q.qpc,true)}
          <tr style="font-weight:800;background:#eef7ee;"><td style="padding:7px 9px;">Quoted PRICE (${q.margin}% margin)</td><td style="padding:7px 9px;text-align:right;">${m(q.price)}</td><td style="padding:7px 9px;text-align:right;">$${q.pricePc.toFixed(2)}</td></tr>
        </tbody>
@@ -722,7 +726,7 @@ function printQuoteReport(){
        ${kv('Quoted cost / pc','$'+q.qpc.toFixed(2),'Actual avg cost / pc',q.avgPc==null?'&ndash;':'$'+q.avgPc.toFixed(2))}
        ${kv('Quoted price / pc','$'+q.pricePc.toFixed(2),'Actual avg selling / pc',q.avgRevPc==null?'&ndash;':'$'+q.avgRevPc.toFixed(2))}
      </table>
-     <div style="font-size:10.5px;color:#777;margin-top:22px;border-top:1px solid #ccc;padding-top:8px;">Costed per good part: to ship ${q.Q.toLocaleString()} good parts, make ${Math.round(q.Qs).toLocaleString()} at ${q.yPct}% yield. Material, run &amp; indirect labor scale with parts made; setup is once per lot; overhead = hours &times; $${q.burden.toFixed(2)}/hr. Generated ${new Date().toLocaleString()} from CamcoDB &mdash; estimate for internal review.</div>
+     <div style="font-size:10.5px;color:#777;margin-top:22px;border-top:1px solid #ccc;padding-top:8px;">Costed per good part: to ship ${q.Q.toLocaleString()} good parts, make ${Math.round(q.Qs).toLocaleString()} at ${q.yPct}% yield. Material, run labor &amp; run overhead scale with parts made; Setup + indirect is a fixed cost per lot (from history = (setup + burden hrs) × wage + overhead) at $${q.burden.toFixed(2)}/hr. Generated ${new Date().toLocaleString()} from CamcoDB &mdash; estimate for internal review.</div>
    </div>`;
   window.print();
 }
