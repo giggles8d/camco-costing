@@ -644,19 +644,20 @@ function renderTestOutput(){
   const qMat=matpc*Qs, qOH=qHrs*BURDEN, qTot=qMat+qRun+qOvhLab+qSet+qOH, qpc=qTot/Q;
   const margin=Math.min(95,Math.max(0,+($('#q_margin')?$('#q_margin').value:0)||0));
   const price=margin<100?qTot/(1-margin/100):qTot, pricePc=price/Q;
-  let sumRev=0,sumQG=0; sos.forEach(r=>{sumRev+=r.rev||0;sumQG+=(r.qtyStock>0?r.qtyStock:r.qty)||0;}); const avgRevPc=sumQG>0?sumRev/sumQG:null;
+  const isR=s=>/[Rr]\s*$/.test(String(s||''));  // rework SOs (e.g. 23122R) — excluded from actual averages
+  let sumRev=0,sumQG=0; sos.forEach(r=>{if(isR(r.so))return; sumRev+=r.rev||0;sumQG+=(r.qtyStock>0?r.qtyStock:r.qty)||0;}); const avgRevPc=sumQG>0?sumRev/sumQG:null;
   const ai=soActIdx(), di=soDeptIdx(); let sumPc=0,cntPc=0;
   const arows=sos.map(r=>{ const son=rstrip(r.so), a=ai[son], dd=di[son]||[];
     const runH=dd.reduce((s,d)=>s+(d.run||0),0), setH=dd.reduce((s,d)=>s+(d.setup||0),0), ovhH=dd.reduce((s,d)=>s+(d.ovh||0),0);
     const lab=a?((+a.actRun||0)+(+a.actSetup||0)+(+a.actOvh||0)):0, totHrs=a?a.totHrs:(runH+setH+ovhH), oh=totHrs*burdenAt(r.closed), mat=r.material||0, tot=mat+lab+oh;
     const good=r.qtyStock>0?r.qtyStock:r.qty, pc=good>0?tot/good:null, cov=a&&a.totHrs>0?a.realHrs/a.totHrs:null, margin=r.rev>0?(r.rev-tot)/r.rev*100:null;
-    if(pc!=null){sumPc+=pc;cntPc++;}
-    return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,ovhH,lab,cov,mat,oh,tot,pc,margin}; });
+    if(pc!=null && !isR(r.so)){sumPc+=pc;cntPc++;}
+    return {so:r.so,closed:r.closed,qty:r.qty,runH,setH,ovhH,lab,cov,mat,oh,tot,pc,margin,isR:isR(r.so)}; });
   const avgPc=cntPc?sumPc/cntPc:null;
   LAST_QUOTE={part:TEST_PART, customer:(sos[0]?sos[0].customer:''), Q, Qs, yPct, margin, burden:BURDEN, qMat, qRun, qOvhLab, qSet, qOH, qTot, qpc, price, pricePc, avgPc, avgRevPc};
   const qk=(l,v,c='')=>`<div class="kpi"><div class="lbl">${l}</div><div class="val ${c}" style="font-size:18px;">${v}</div></div>`;
   const qb=(l,forQ,pc,str=false)=>`<tr${str?' style="border-top:2px solid var(--line);font-weight:700;"':''}><td>${l}</td><td>${fmtUSD(forQ)}</td><td class="muted">${pc==null?'':fmtUSD(pc,2)}</td></tr>`;
-  const arow=r=>`<tr><td><span class="solink" data-so="${r.so}">${r.so}</span></td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtH(r.ovhH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
+  const arow=r=>`<tr${r.isR?' class="muted" title="rework SO — excluded from actual averages" style="opacity:.55;"':''}><td><span class="solink" data-so="${r.so}">${r.so}</span>${r.isR?' <span style="font-size:10px;">(rework, excl.)</span>':''}</td><td>${r.closed}</td><td>${fmtN(r.qty)}</td><td>${fmtH(r.runH)}</td><td>${fmtH(r.setH)}</td><td>${fmtH(r.ovhH)}</td><td>${fmtUSD(r.lab)}</td><td class="muted">${r.cov==null?'&ndash;':(r.cov*100).toFixed(0)+'%'}</td><td>${fmtUSD(r.mat)}</td><td>${fmtUSD(r.oh)}</td><td><b>${fmtUSD(r.tot)}</b></td><td>${r.pc==null?'':fmtUSD(r.pc,2)}</td><td class="${r.margin<0?'neg':'pos'}">${r.margin==null?'':r.margin.toFixed(1)+'%'}</td></tr>`;
   out.innerHTML=`
    <div class="split">
      <div>
